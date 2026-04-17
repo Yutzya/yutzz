@@ -1,91 +1,116 @@
--- Combined Script: ESP + Yutzz
--- Rayfield UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local success, Rayfield = pcall(function()
-    return loadstring(game:HttpGet('https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua'))()
-end)
-
-if not success then
-    warn("Rayfield Failed to Load")
-    return
-end
-
--- ===================== CONFIG =====================
-
+-- =============================================
+-- CONFIG
+-- =============================================
 local Config = {
     Players = {
-        Killer   = { Color = Color3.fromRGB(255, 93, 108) },
-        Survivor = { Color = Color3.fromRGB(64, 224, 255) }
+        Killer = {Color = Color3.fromRGB(255, 93, 108)},
+        Survivor = {Color = Color3.fromRGB(64, 224, 255)}
     },
     Objects = {
-        Generator = { Color = Color3.fromRGB(150, 0, 200) },
-        Gate      = { Color = Color3.fromRGB(255, 255, 255) },
-        Pallet    = { Color = Color3.fromRGB(74, 255, 181) },
-        Window    = { Color = Color3.fromRGB(74, 255, 181) },
-        Hook      = { Color = Color3.fromRGB(132, 255, 169) }
+        Generator = {Color = Color3.fromRGB(150, 0, 200)},
+        Gate = {Color = Color3.fromRGB(255, 255, 255)},
+        Pallet = {Color = Color3.fromRGB(74, 255, 181)},
+        Window = {Color = Color3.fromRGB(74, 255, 181)},
+        Hook = {Color = Color3.fromRGB(132, 255, 169)}
     }
 }
 
 local MaskNames = {
-    ["Richard"] = "Rooster",
-    ["Tony"]    = "Tiger",
-    ["Brandon"] = "Panther",
-    ["Cobra"]   = "Cobra",
-    ["Richter"] = "Rat",
-    ["Rabbit"]  = "Rabbit",
-    ["Alex"]    = "Chainsaw"
+    ["Richard"] = "Rooster", ["Tony"] = "Tiger", ["Brandon"] = "Panther",
+    ["Cobra"] = "Cobra", ["Richter"] = "Rat", ["Rabbit"] = "Rabbit", ["Alex"] = "Chainsaw"
 }
 
 local MaskColors = {
-    ["Richard"] = Color3.fromRGB(255, 0, 0),
-    ["Tony"]    = Color3.fromRGB(255, 255, 0),
-    ["Brandon"] = Color3.fromRGB(160, 32, 240),
-    ["Cobra"]   = Color3.fromRGB(0, 255, 0),
-    ["Richter"] = Color3.fromRGB(0, 0, 0),
-    ["Rabbit"]  = Color3.fromRGB(255, 105, 180),
-    ["Alex"]    = Color3.fromRGB(255, 255, 255)
+    ["Richard"] = Color3.fromRGB(255, 0, 0), ["Tony"] = Color3.fromRGB(255, 255, 0),
+    ["Brandon"] = Color3.fromRGB(160, 32, 240), ["Cobra"] = Color3.fromRGB(0, 255, 0),
+    ["Richter"] = Color3.fromRGB(0, 0, 0), ["Rabbit"] = Color3.fromRGB(255, 105, 180),
+    ["Alex"] = Color3.fromRGB(255, 255, 255)
 }
 
--- ===================== SERVICES =====================
-
-local Players            = game:GetService("Players")
-local RunService         = game:GetService("RunService")
+-- =============================================
+-- SERVICES
+-- =============================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local GuiService         = game:GetService("GuiService")
-local Lighting           = game:GetService("Lighting")
+local GuiService = game:GetService("GuiService")
+local Lighting = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
+local player = LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- ===================== STATE =====================
-
-local ActiveGenerators  = {}
-local LastUpdateTick    = 0
-local LastFullESPRefresh = 0
-
-local TouchID    = 8822
-local ActionPath = "Survivor-mob.Controls.action.check"
-local HeartbeatConnection  = nil
-local VisibilityConnection = nil
+-- =============================================
+-- VARIABLES
+-- =============================================
+local ESPEnabled = true
+local speedHackEnabled = false
+local desiredSpeed = 16
+local speedConnections = {}
 local IndicatorGui = nil
+local LastUpdateTick = 0
+local ActiveGenerators = {}
 
--- Global feature flags
-getgenv().Features = {
-    -- ESP
-    ESPEnabled       = true,
-    FullBrightEnabled = true,
-    KillerWarning    = true,
-    AutoSkillCheck   = true,
-    -- Hitbox
-    HitboxEnabled    = false,
-    HitboxSize       = 15,
-    TeamCheck        = false,
-    -- Player
-    Speed            = 16,
-    LoopSpeed        = false,
-}
+-- =============================================
+-- SPEED HACK
+-- =============================================
+local function applySpeed(humanoid)
+    if humanoid and speedHackEnabled then
+        humanoid.WalkSpeed = desiredSpeed
+    end
+end
 
--- ===================== HELPERS =====================
+local function setupSpeedEnforcement(humanoid)
+    for _, conn in ipairs(speedConnections) do
+        conn:Disconnect()
+    end
+    speedConnections = {}
+
+    if humanoid then
+        applySpeed(humanoid)
+        table.insert(speedConnections, humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+            if speedHackEnabled and humanoid.WalkSpeed ~= desiredSpeed then
+                humanoid.WalkSpeed = desiredSpeed
+            end
+        end))
+        table.insert(speedConnections, RunService.Heartbeat:Connect(function()
+            if speedHackEnabled and humanoid.WalkSpeed ~= desiredSpeed then
+                humanoid.WalkSpeed = desiredSpeed
+            end
+        end))
+    end
+end
+
+player.CharacterAdded:Connect(function(character)
+    local humanoid = character:WaitForChild("Humanoid", 10)
+    if humanoid and speedHackEnabled then
+        setupSpeedEnforcement(humanoid)
+    end
+end)
+
+if player.Character then
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid and speedHackEnabled then
+        setupSpeedEnforcement(humanoid)
+    end
+end
+
+-- =============================================
+-- CORE ESP FUNCTIONS
+-- =============================================
+local function SetupGui()
+    if PlayerGui:FindFirstChild("ChasedInds") then
+        PlayerGui:FindFirstChild("ChasedInds"):Destroy()
+    end
+    IndicatorGui = Instance.new("ScreenGui")
+    IndicatorGui.Name = "ChasedInds"
+    IndicatorGui.IgnoreGuiInset = true
+    IndicatorGui.DisplayOrder = 999
+    IndicatorGui.ResetOnSpawn = false
+    IndicatorGui.Parent = PlayerGui
+end
 
 local function GetGameValue(obj, name)
     if not obj then return nil end
@@ -93,94 +118,58 @@ local function GetGameValue(obj, name)
     if attr ~= nil then return attr end
     local child = obj:FindFirstChild(name)
     if child then
-        local ok, val = pcall(function() return child.Value end)
-        if ok then return val end
+        local success, val = pcall(function() return child.Value end)
+        if success then return val end
     end
     return nil
 end
 
 local function ApplyHighlight(object, color)
+    if not object or not object.Parent then return end
     local h = object:FindFirstChild("H") or Instance.new("Highlight")
-    h.Name             = "H"
-    h.Adornee          = object
-    h.FillColor        = color
-    h.OutlineColor     = color
+    h.Name = "H"
+    h.Adornee = object
+    h.FillColor = color
+    h.OutlineColor = color
     h.FillTransparency = 0.8
     h.OutlineTransparency = 0.3
-    h.DepthMode        = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Parent           = object
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Parent = object
 end
 
 local function RemoveHighlight(object)
+    if not object then return end
     local h = object:FindFirstChild("H")
     if h then h:Destroy() end
 end
 
 local function CreateBillboardTag(text, color, size, textSize)
     local billboard = Instance.new("BillboardGui")
-    billboard.Name        = "BitchHook"
+    billboard.Name = "BitchHook"
     billboard.AlwaysOnTop = true
-    billboard.Size        = size or UDim2.new(0, 120, 0, 30)
-
+    billboard.Size = size or UDim2.new(0, 120, 0, 30)
     local label = Instance.new("TextLabel")
-    label.Name                 = "BitchHook"
-    label.Size                 = UDim2.new(1, 0, 1, 0)
+    label.Name = "BitchHook"
+    label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
-    label.Text                 = text
-    label.TextColor3           = color
+    label.Text = text
+    label.TextColor3 = color
     label.TextStrokeTransparency = 0
-    label.TextStrokeColor3     = Color3.new(0, 0, 0)
-    label.Font                 = Enum.Font.GothamBold
-    label.TextSize             = textSize or 10
-    label.TextWrapped          = true
-    label.RichText             = true
-    label.Parent               = billboard
-
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = textSize or 10
+    label.TextWrapped = true
+    label.RichText = true
+    label.Parent = billboard
     return billboard
 end
 
--- ===================== GUI SETUP =====================
-
-local function SetupGui()
-    if PlayerGui:FindFirstChild("ChasedInds") then
-        PlayerGui:FindFirstChild("ChasedInds"):Destroy()
-    end
-    IndicatorGui = Instance.new("ScreenGui")
-    IndicatorGui.Name           = "ChasedInds"
-    IndicatorGui.IgnoreGuiInset = true
-    IndicatorGui.DisplayOrder   = 999
-    IndicatorGui.Parent         = PlayerGui
-end
-
--- ===================== ESP FUNCTIONS =====================
-
 local function updatePlayerNametag(player)
-    if not getgenv().Features.ESPEnabled then
-        -- Clean up if disabled
-        if player.Character then
-            local root = player.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local bb = root:FindFirstChild("BitchHook") if bb then bb:Destroy() end
-                local mh = root:FindFirstChild("MaskHook")  if mh then mh:Destroy() end
-                local kw = root:FindFirstChild("KillerWarn") if kw then kw:Destroy() end
-            end
-            RemoveHighlight(player.Character)
-        end
-        if IndicatorGui then
-            for _, suffix in ipairs({"_Chased", "_Killer", ""}) do
-                local obj = IndicatorGui:FindFirstChild(player.Name .. suffix)
-                if obj then obj:Destroy() end
-            end
-        end
-        return
-    end
-
+    if not ESPEnabled then return end
     if not IndicatorGui or not IndicatorGui.Parent then return end
     if not player.Character then
-        for _, suffix in ipairs({"_Chased", "_Killer", ""}) do
-            local obj = IndicatorGui:FindFirstChild(player.Name .. suffix)
-            if obj then obj:Destroy() end
-        end
+        local m = IndicatorGui:FindFirstChild(player.Name)
+        if m then m:Destroy() end
         return
     end
 
@@ -188,15 +177,15 @@ local function updatePlayerNametag(player)
     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
     if not rootPart then return end
 
-    local teamName          = (player.Team and player.Team.Name:lower()) or ""
+    local teamName = (player.Team and player.Team.Name:lower()) or ""
     local selectedKillerAttr = GetGameValue(player, "SelectedKiller")
-    local rawMask           = GetGameValue(player, "Mask") or GetGameValue(player.Character, "Mask")
-    local isKnocked         = GetGameValue(player.Character, "Knocked")
-    local isHooked          = GetGameValue(player.Character, "IsHooked")
-    local isChased          = GetGameValue(player.Character, "IsChased")
+    local rawMask = GetGameValue(player, "Mask") or GetGameValue(player.Character, "Mask")
+    local isKnocked = GetGameValue(player.Character, "Knocked")
+    local isHooked = GetGameValue(player.Character, "IsHooked")
+    local isChased = GetGameValue(player.Character, "IsChased")
 
     local isKiller = teamName:find("killer") ~= nil
-    local color    = isKiller and Config.Players.Killer.Color or Config.Players.Survivor.Color
+    local color = isKiller and Config.Players.Killer.Color or Config.Players.Survivor.Color
 
     if isHooked then
         color = Color3.fromRGB(255, 182, 193)
@@ -209,22 +198,25 @@ local function updatePlayerNametag(player)
         distance = math.floor((rootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude)
     end
 
-    local baseName   = (isKiller and selectedKillerAttr and tostring(selectedKillerAttr) ~= "") and tostring(selectedKillerAttr) or player.Name
-    local billboard  = rootPart:FindFirstChild("BitchHook")
-    local nameText   = baseName .. "\n[" .. distance .. " studs]"
+    local baseName = (isKiller and selectedKillerAttr and tostring(selectedKillerAttr) ~= "") and tostring(selectedKillerAttr) or player.Name
+    local billboard = rootPart:FindFirstChild("BitchHook")
+    local nameText = baseName .. "\n[" .. distance .. " studs]"
 
     if not billboard then
-        billboard          = CreateBillboardTag(nameText, color)
-        billboard.Adornee  = rootPart
-        billboard.Parent   = rootPart
+        billboard = CreateBillboardTag(nameText, color)
+        billboard.Adornee = rootPart
+        billboard.Parent = rootPart
     else
         local lbl = billboard:FindFirstChild("BitchHook") or billboard:FindFirstChildOfClass("TextLabel")
-        if lbl then lbl.Text = nameText lbl.TextColor3 = color end
+        if lbl then
+            lbl.Text = nameText
+            lbl.TextColor3 = color
+        end
     end
 
     ApplyHighlight(player.Character, color)
 
-    -- Mask tag
+    -- Mask Display
     local hasMask = false
     if isKiller and string.match(tostring(selectedKillerAttr):lower(), "masked") and rawMask then
         local searchMask = tostring(rawMask):lower()
@@ -234,13 +226,16 @@ local function updatePlayerNametag(player)
                 local maskBillboard = rootPart:FindFirstChild("MaskHook")
                 if not maskBillboard then
                     maskBillboard = CreateBillboardTag(name, MaskColors[key] or Color3.new(1,1,1), UDim2.new(0, 100, 0, 20), 12)
-                    maskBillboard.Name        = "MaskHook"
+                    maskBillboard.Name = "MaskHook"
                     maskBillboard.StudsOffset = Vector3.new(0, 3, 0)
-                    maskBillboard.Adornee     = rootPart
-                    maskBillboard.Parent      = rootPart
+                    maskBillboard.Adornee = rootPart
+                    maskBillboard.Parent = rootPart
                 else
                     local lbl = maskBillboard:FindFirstChild("BitchHook") or maskBillboard:FindFirstChildOfClass("TextLabel")
-                    if lbl then lbl.Text = name lbl.TextColor3 = MaskColors[key] or Color3.new(1,1,1) end
+                    if lbl then
+                        lbl.Text = name
+                        lbl.TextColor3 = MaskColors[key] or Color3.new(1,1,1)
+                    end
                 end
                 break
             end
@@ -250,162 +245,56 @@ local function updatePlayerNametag(player)
         local maskBillboard = rootPart:FindFirstChild("MaskHook")
         if maskBillboard then maskBillboard:Destroy() end
     end
-
-    -- Chased 2D indicator
-    local chasedLabel2D = IndicatorGui:FindFirstChild(player.Name .. "_Chased")
-    if isChased then
-        local ct3 = billboard:FindFirstChild("ChasedLabel")
-        if not ct3 then
-            ct3 = Instance.new("TextLabel", billboard)
-            ct3.Name                   = "ChasedLabel"
-            ct3.Size                   = UDim2.new(1,0,1,0)
-            ct3.Position               = UDim2.new(0,0,-1.2,0)
-            ct3.BackgroundTransparency = 1
-            ct3.Font                   = Enum.Font.GothamBold
-            ct3.TextSize               = 24
-        end
-        ct3.Text, ct3.TextColor3, ct3.TextStrokeTransparency = "!!", color, 0
-
-        if not chasedLabel2D then
-            chasedLabel2D = Instance.new("TextLabel", IndicatorGui)
-            chasedLabel2D.Name                   = player.Name .. "_Chased"
-            chasedLabel2D.BackgroundTransparency = 1
-            chasedLabel2D.Font                   = Enum.Font.GothamBold
-            chasedLabel2D.TextSize               = 24
-            chasedLabel2D.TextStrokeTransparency = 0
-            chasedLabel2D.AnchorPoint            = Vector2.new(0.5, 0.5)
-        end
-        chasedLabel2D.Text, chasedLabel2D.TextColor3 = "!!", color
-
-        local screenPos, onScreen = workspace.CurrentCamera:WorldToScreenPoint(rootPart.Position)
-        if onScreen then
-            chasedLabel2D.Visible = false
-        else
-            chasedLabel2D.Visible = true
-            local viewportCenter = workspace.CurrentCamera.ViewportSize / 2
-            local direction = Vector2.new(screenPos.X, screenPos.Y) - viewportCenter
-            if screenPos.Z < 0 then direction = -direction end
-            local maxScale = math.max(math.abs(direction.X) / (viewportCenter.X - 30), math.abs(direction.Y) / (viewportCenter.Y - 30))
-            chasedLabel2D.Position = UDim2.new(0, viewportCenter.X + direction.X / (maxScale == 0 and 1 or maxScale), 0, viewportCenter.Y + direction.Y / (maxScale == 0 and 1 or maxScale))
-        end
-    else
-        if chasedLabel2D then chasedLabel2D:Destroy() end
-        local ct3 = billboard:FindFirstChild("ChasedLabel")
-        if ct3 then ct3:Destroy() end
-    end
-
-    -- Killer 2D off-screen indicator
-    local killerLabel2D = IndicatorGui:FindFirstChild(player.Name .. "_Killer")
-    if isKiller then
-        if not killerLabel2D then
-            killerLabel2D = Instance.new("TextLabel", IndicatorGui)
-            killerLabel2D.Name                   = player.Name .. "_Killer"
-            killerLabel2D.BackgroundTransparency = 1
-            killerLabel2D.Font                   = Enum.Font.GothamBold
-            killerLabel2D.TextSize               = 10
-            killerLabel2D.TextStrokeTransparency = 0
-            killerLabel2D.Size                   = UDim2.new(0, 120, 0, 30)
-            killerLabel2D.RichText               = true
-            killerLabel2D.AnchorPoint            = Vector2.new(0.5, 0.5)
-        end
-        killerLabel2D.Text, killerLabel2D.TextColor3 = baseName .. "\n[" .. distance .. " studs]", color
-
-        local screenPos, onScreen = workspace.CurrentCamera:WorldToScreenPoint(rootPart.Position)
-        if not onScreen then
-            killerLabel2D.Visible = true
-            local viewportCenter = workspace.CurrentCamera.ViewportSize / 2
-            local direction = Vector2.new(screenPos.X, screenPos.Y) - viewportCenter
-            if screenPos.Z < 0 then direction = -direction end
-            local maxScale = math.max(math.abs(direction.X) / (viewportCenter.X - 30), math.abs(direction.Y) / (viewportCenter.Y - 30))
-            killerLabel2D.Position = UDim2.new(0, viewportCenter.X + direction.X / (maxScale == 0 and 1 or maxScale), 0, viewportCenter.Y + direction.Y / (maxScale == 0 and 1 or maxScale))
-        else
-            killerLabel2D.Visible = false
-        end
-    elseif killerLabel2D then
-        killerLabel2D:Destroy()
-    end
 end
 
 local function updateGeneratorProgress(generator)
+    if not ESPEnabled then return false end
     if not generator or not generator.Parent then return true end
     local percent = GetGameValue(generator, "RepairProgress") or GetGameValue(generator, "Progress") or 0
 
     local billboard = generator:FindFirstChild("GenBitchHook")
     if percent >= 100 then
         if billboard then billboard:Destroy() end
-        local h = generator:FindFirstChild("H") if h then h:Destroy() end
+        local h = generator:FindFirstChild("H")
+        if h then h:Destroy() end
         return true
     end
 
     local cp = math.clamp(percent, 0, 100)
     local finalColor = cp < 50
         and Config.Objects.Generator.Color:Lerp(Color3.fromRGB(180, 180, 0), cp / 50)
-        or  Color3.fromRGB(180, 180, 0):Lerp(Color3.fromRGB(0, 150, 0), (cp - 50) / 50)
-
+        or Color3.fromRGB(180, 180, 0):Lerp(Color3.fromRGB(0, 150, 0), (cp - 50) / 50)
     local percentStr = string.format("[%.2f%%]", percent)
+
     if not billboard then
         billboard = CreateBillboardTag(percentStr, finalColor)
-        billboard.Name        = "GenBitchHook"
+        billboard.Name = "GenBitchHook"
         billboard.StudsOffset = Vector3.new(0, 2, 0)
-        billboard.Adornee     = generator:FindFirstChild("defaultMaterial", true) or generator
-        billboard.Parent      = generator
+        billboard.Adornee = generator:FindFirstChild("defaultMaterial", true) or generator
+        billboard.Parent = generator
     else
         local lbl = billboard:FindFirstChild("BitchHook") or billboard:FindFirstChildOfClass("TextLabel")
-        if lbl then lbl.Text = percentStr lbl.TextColor3 = finalColor end
+        if lbl then
+            lbl.Text = percentStr
+            lbl.TextColor3 = finalColor
+        end
     end
     return false
 end
 
-local function updateNextKillerDisplay()
-    if not IndicatorGui or not IndicatorGui.Parent then return end
-    local label    = IndicatorGui:FindFirstChild("NextKillerDisplay")
-    local teamName = (LocalPlayer.Team and LocalPlayer.Team.Name:lower()) or ""
-
-    if teamName:find("spectator") or teamName:find("lobby") then
-        if not label then
-            label = Instance.new("TextLabel", IndicatorGui)
-            label.Name                   = "NextKillerDisplay"
-            label.Size                   = UDim2.new(0, 220, 0, 30)
-            label.Position               = UDim2.new(0.5, 0, 0, 45)
-            label.AnchorPoint            = Vector2.new(0.5, 0)
-            label.BackgroundTransparency = 0.5
-            label.BackgroundColor3       = Color3.new(0, 0, 0)
-            label.TextColor3             = Color3.new(1, 1, 1)
-            label.Font                   = Enum.Font.GothamBold
-            label.TextSize               = 14
-            label.RichText               = true
-            label.Text                   = "Next Killer: Calculating..."
-        end
-
-        local players = Players:GetPlayers()
-        table.sort(players, function(a, b)
-            local aA = GetGameValue(a, "AllowKiller") or false
-            local bA = GetGameValue(b, "AllowKiller") or false
-            if aA ~= bA then return aA == true end
-            return (GetGameValue(a, "KillerChance") or 0) > (GetGameValue(b, "KillerChance") or 0)
-        end)
-
-        local nk = players[1]
-        if nk then
-            label.Text = "Next Killer: <font color=\"rgb(255,0,0)\">" ..
-                (nk == LocalPlayer and "YOU" or tostring(GetGameValue(nk, "SelectedKiller") or nk.Name)) ..
-                "</font>"
-        end
-    elseif label then
-        label:Destroy()
-    end
-end
-
 local function RefreshESP()
+    if not ESPEnabled then return end
     ActiveGenerators = {}
-    if not getgenv().Features.ESPEnabled then return end
-
+    
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name == "Window" then ApplyHighlight(obj, Config.Objects.Window.Color) end
+        if obj.Name == "Window" then
+            ApplyHighlight(obj, Config.Objects.Window.Color)
+        end
     end
-
+    
     local Map = workspace:FindFirstChild("Map")
     if not Map then return end
+    
     for _, obj in ipairs(Map:GetDescendants()) do
         if obj.Name == "Generator" then
             ApplyHighlight(obj, Config.Objects.Generator.Color)
@@ -417,7 +306,7 @@ local function RefreshESP()
                     if p:IsA("MeshPart") then ApplyHighlight(p, Config.Objects.Hook.Color) end
                 end
             end
-        elseif obj.Name == "Palletwrong" or obj.Name == "Pallet" then
+        elseif (obj.Name == "Palletwrong" or obj.Name == "Pallet") then
             ApplyHighlight(obj, Config.Objects.Pallet.Color)
         elseif obj.Name == "Gate" then
             ApplyHighlight(obj, Config.Objects.Gate.Color)
@@ -425,388 +314,254 @@ local function RefreshESP()
     end
 end
 
--- ===================== AUTO SKILL CHECK =====================
-
-local function GetActionTarget()
-    local current = PlayerGui
-    for segment in string.gmatch(ActionPath, "[^"]%.+[^%.]+") do
-        current = current and current:FindFirstChild(segment)
+local function ClearAllESP()
+    if IndicatorGui then
+        for _, child in ipairs(IndicatorGui:GetChildren()) do
+            child:Destroy()
+        end
     end
-    return current
-end
-
-local function TriggerMobileButton()
-    local b = GetActionTarget()
-    if b and b:IsA("GuiObject") then
-        local p, s, i = b.AbsolutePosition, b.AbsoluteSize, GuiService:GetGuiInset()
-        local cx, cy = p.X + (s.X / 2) + i.X, p.Y + (s.Y / 2) + i.Y
-        pcall(function()
-            VirtualInputManager:SendTouchEvent(TouchID, 0, cx, cy)
-            task.wait(0.01)
-            VirtualInputManager:SendTouchEvent(TouchID, 2, cx, cy)
-        end)
+    
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        RemoveHighlight(obj)
+    end
+    
+    local Map = workspace:FindFirstChild("Map")
+    if Map then
+        for _, obj in ipairs(Map:GetDescendants()) do
+            RemoveHighlight(obj)
+        end
     end
 end
 
-local function InitializeAutobuy()
-    if not getgenv().Features.AutoSkillCheck then return end
-    task.spawn(function()
-        local prompt = PlayerGui:WaitForChild("SkillCheckPromptGui", 10)
-        local check  = prompt and prompt:WaitForChild("Check", 10)
-        if not check then return end
-        local line, goal = check:WaitForChild("Line"), check:WaitForChild("Goal")
-
-        if VisibilityConnection then VisibilityConnection:Disconnect() end
-        VisibilityConnection = check:GetPropertyChangedSignal("Visible"):Connect(function()
-            if LocalPlayer.Team and LocalPlayer.Team.Name == "Survivors" and check.Visible and getgenv().Features.AutoSkillCheck then
-                if HeartbeatConnection then HeartbeatConnection:Disconnect() end
-                HeartbeatConnection = RunService.Heartbeat:Connect(function()
-                    local lr, gr = line.Rotation % 360, goal.Rotation % 360
-                    local ss, se = (gr + 101) % 360, (gr + 115) % 360
-                    if (ss > se and (lr >= ss or lr <= se)) or (lr >= ss and lr <= se) then
-                        TriggerMobileButton()
-                        if HeartbeatConnection then HeartbeatConnection:Disconnect() HeartbeatConnection = nil end
-                    end
-                end)
-            elseif HeartbeatConnection then
-                HeartbeatConnection:Disconnect()
-                HeartbeatConnection = nil
-            end
-        end)
-    end)
-end
-
--- ===================== RAYFIELD UI =====================
-
+-- =============================================
+-- RAYFIELD WINDOW
+-- =============================================
 local Window = Rayfield:CreateWindow({
-    Name                  = "Yutzz",
-    LoadingTitle          = "Yutzz",
-    LoadingSubtitle       = "by Yutzz",
-    Theme                 = "Default",
-    DisableRayfieldPrompts = true,
-    DisableBuildWarnings  = true,
+    Name = "Yutzz",
+    LoadingTitle = "VD",
+    LoadingSubtitle = "by Yutzz",
+    Theme = "Default",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "DBRHub",
+        FileName = "Config"
+    },
+    KeySystem = false,
 })
 
--- ── TAB: ESP ────────────────────────────────────────────
+-- =============================================
+-- TAB: MAIN
+-- =============================================
+local MainTab = Window:CreateTab("Main", 4483345998)
 
-local TabESP = Window:CreateTab("ESP", "eye")
-
-TabESP:CreateToggle({
-    Name         = "Enable ESP",
+MainTab:CreateToggle({
+    Name = "ALL ESP",
     CurrentValue = true,
-    Callback     = function(v)
-        getgenv().Features.ESPEnabled = v
-        if v then
+    Flag = "AllESP",
+    Callback = function(val)
+        ESPEnabled = val
+        if val then
             RefreshESP()
-            Rayfield:Notify({ Title = "ESP", Content = "ESP Enabled", Duration = 3 })
+            Rayfield:Notify({
+                Title = "ESP",
+                Content = "All ESP Enabled!",
+                Duration = 3,
+                Image = 4483345998,
+            })
         else
-            -- Remove all highlights & billboards
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character then
-                    RemoveHighlight(p.Character)
-                    local root = p.Character:FindFirstChild("HumanoidRootPart")
-                    if root then
-                        for _, bb in ipairs({"BitchHook","MaskHook","KillerWarn"}) do
-                            local obj = root:FindFirstChild(bb) if obj then obj:Destroy() end
-                        end
-                    end
-                end
-            end
-            -- Remove generator billboards
-            for _, g in ipairs(ActiveGenerators) do
-                if g and g.Parent then
-                    local bb = g:FindFirstChild("GenBitchHook") if bb then bb:Destroy() end
-                    RemoveHighlight(g)
-                end
-            end
-            ActiveGenerators = {}
-            Rayfield:Notify({ Title = "ESP", Content = "ESP Disabled", Duration = 3 })
+            ClearAllESP()
+            Rayfield:Notify({
+                Title = "ESP",
+                Content = "All ESP Disabled!",
+                Duration = 3,
+                Image = 4483345998,
+            })
         end
     end
 })
 
-TabESP:CreateToggle({
-    Name         = "Fullbright",
-    CurrentValue = true,
-    Callback     = function(v)
-        getgenv().Features.FullBrightEnabled = v
-        if not v then
-            Lighting.Ambient       = Color3.fromRGB(127, 127, 127)
-            Lighting.OutdoorAmbient = Color3.fromRGB(70, 70, 70)
-            Lighting.Brightness    = 1
-            Lighting.ClockTime     = 14
-            Lighting.GlobalShadows = true
-            Lighting.FogEnd        = 100000
-        end
-    end
-})
-
-TabESP:CreateToggle({
-    Name         = "Killer Proximity Warning",
-    CurrentValue = true,
-    Callback     = function(v)
-        getgenv().Features.KillerWarning = v
-        if not v then
-            local myChar = LocalPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            if myRoot then
-                local warn = myRoot:FindFirstChild("KillerWarn")
-                if warn then warn:Destroy() end
-            end
-        end
-    end
-})
-
-TabESP:CreateSlider({
-    Name         = "Killer Warning Radius",
-    Range        = { 20, 300 },
-    Increment    = 5,
-    CurrentValue = 99,
-    Callback     = function(v)
-        getgenv().Features.KillerWarnRadius = v
-    end
-})
-
-TabESP:CreateToggle({
-    Name         = "Auto Skill Check",
-    CurrentValue = true,
-    Callback     = function(v)
-        getgenv().Features.AutoSkillCheck = v
-        if v then
-            InitializeAutobuy()
-            Rayfield:Notify({ Title = "ESP", Content = "Auto Skill Check On", Duration = 3 })
-        elseif HeartbeatConnection then
-            HeartbeatConnection:Disconnect()
-            HeartbeatConnection = nil
-        end
-    end
-})
-
--- Colour pickers for ESP object colours
-TabESP:CreateColorPicker({
-    Name         = "Generator Color",
-    Color        = Config.Objects.Generator.Color,
-    Callback     = function(v)
-        Config.Objects.Generator.Color = v
+MainTab:CreateButton({
+    Name = "Refresh ESP",
+    Callback = function()
         RefreshESP()
+        Rayfield:Notify({
+            Title = "ESP",
+            Content = "ESP Refreshed!",
+            Duration = 3,
+            Image = 4483345998,
+        })
     end
 })
 
-TabESP:CreateColorPicker({
-    Name         = "Hook Color",
-    Color        = Config.Objects.Hook.Color,
-    Callback     = function(v)
-        Config.Objects.Hook.Color = v
-        RefreshESP()
-    end
+-- =============================================
+-- TAB: SPEED
+-- =============================================
+local SpeedTab = Window:CreateTab("Speed", 4483345998)
+
+SpeedTab:CreateParagraph({
+    Title = "Speed Hack",
+    Content = "Press number keys (1-9) to set walk speed. Press 0 to disable."
 })
 
-TabESP:CreateColorPicker({
-    Name         = "Survivor Color",
-    Color        = Config.Players.Survivor.Color,
-    Callback     = function(v)
-        Config.Players.Survivor.Color = v
-    end
-})
-
-TabESP:CreateColorPicker({
-    Name         = "Killer Color",
-    Color        = Config.Players.Killer.Color,
-    Callback     = function(v)
-        Config.Players.Killer.Color = v
-    end
-})
-
--- ── TAB: HITBOX ─────────────────────────────────────────
-
-local TabHitbox = Window:CreateTab("Hitbox", "crosshair")
-
-TabHitbox:CreateSlider({
-    Name         = "Hitbox Size",
-    Range        = { 2, 50 },
-    Increment    = 1,
-    CurrentValue = 15,
-    Callback     = function(v)
-        getgenv().Features.HitboxSize = v
-    end
-})
-
-TabHitbox:CreateToggle({
-    Name         = "Enable Hitbox",
-    CurrentValue = false,
-    Callback     = function(v)
-        getgenv().Features.HitboxEnabled = v
-        if v then
-            Rayfield:Notify({ Title = "Hitbox", Content = "Hitbox On", Duration = 3 })
+SpeedTab:CreateInput({
+    Name = "Set Speed Value",
+    PlaceholderText = "Enter speed number...",
+    RemoveTextAfterFocusLost = false,
+    Flag = "CustomSpeed",
+    Callback = function(input)
+        local speed = tonumber(input)
+        if speed and speed > 0 then
+            desiredSpeed = speed
+            speedHackEnabled = true
+            local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                setupSpeedEnforcement(humanoid)
+            end
+            Rayfield:Notify({
+                Title = "Speed",
+                Content = "Speed set to " .. tostring(speed),
+                Duration = 3,
+                Image = 4483345998,
+            })
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Enter a valid number!",
+                Duration = 3,
+                Image = 4483345998,
+            })
         end
     end
 })
 
-TabHitbox:CreateToggle({
-    Name         = "Team Check",
-    CurrentValue = false,
-    Callback     = function(v)
-        getgenv().Features.TeamCheck = v
-    end
-})
-
--- ── TAB: PLAYER ─────────────────────────────────────────
-
-local TabPlayer = Window:CreateTab("Player", "user")
-
-TabPlayer:CreateInput({
-    Name            = "WalkSpeed",
-    PlaceholderText = "16",
-    Callback        = function(v)
-        local n = tonumber(v)
-        if n then getgenv().Features.Speed = n end
-    end
-})
-
-TabPlayer:CreateToggle({
-    Name         = "Loop Speed",
-    CurrentValue = false,
-    Callback     = function(v)
-        getgenv().Features.LoopSpeed = v
-        if v then
-            spawn(function()
-                while getgenv().Features.LoopSpeed do
-                    task.wait(0.1)
-                    pcall(function()
-                        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-                            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = getgenv().Features.Speed
-                        end
-                    end)
-                end
-            end)
+SpeedTab:CreateButton({
+    Name = "Reset Speed",
+    Callback = function()
+        speedHackEnabled = false
+        desiredSpeed = 16
+        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = 16
         end
+        for _, conn in ipairs(speedConnections) do
+            conn:Disconnect()
+        end
+        speedConnections = {}
+        Rayfield:Notify({
+            Title = "Speed",
+            Content = "Speed reset to 16!",
+            Duration = 3,
+            Image = 4483345998,
+        })
     end
 })
 
--- ===================== EVENT CONNECTIONS =====================
+-- =============================================
+-- KEYBOARD SPEED HACK
+-- =============================================
+local UserInputService = game:GetService("UserInputService")
 
-getgenv().Features.KillerWarnRadius = getgenv().Features.KillerWarnRadius or 99
+local speedPresets = {
+    [Enum.KeyCode.One] = 50,
+    [Enum.KeyCode.Two] = 75,
+    [Enum.KeyCode.Three] = 100,
+    [Enum.KeyCode.Four] = 150,
+    [Enum.KeyCode.Five] = 200,
+    [Enum.KeyCode.Six] = 250,
+    [Enum.KeyCode.Seven] = 300,
+    [Enum.KeyCode.Eight] = 350,
+    [Enum.KeyCode.Nine] = 400,
+}
 
-workspace.ChildAdded:Connect(function(c)
-    if c.Name == "Map" then task.wait(1) RefreshESP() end
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.Zero then
+        speedHackEnabled = false
+        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then humanoid.WalkSpeed = 16 end
+        Rayfield:Notify({
+            Title = "Speed",
+            Content = "Speed disabled",
+            Duration = 2,
+            Image = 4483345998,
+        })
+    elseif speedPresets[input.KeyCode] then
+        desiredSpeed = speedPresets[input.KeyCode]
+        speedHackEnabled = true
+        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            setupSpeedEnforcement(humanoid)
+        end
+        Rayfield:Notify({
+            Title = "Speed",
+            Content = "Speed: " .. tostring(desiredSpeed),
+            Duration = 2,
+            Image = 4483345998,
+        })
+    end
 end)
 
-LocalPlayer.CharacterAdded:Connect(function()
-    if HeartbeatConnection   then HeartbeatConnection:Disconnect()   end
-    if VisibilityConnection  then VisibilityConnection:Disconnect()  end
-    SetupGui()
-    task.wait(1)
-    InitializeAutobuy()
-end)
-
--- ===================== MAIN LOOP =====================
-
+-- =============================================
+-- MAIN LOOP
+-- =============================================
 RunService.Heartbeat:Connect(function()
     local now = tick()
     if now - LastUpdateTick < 0.05 then return end
     LastUpdateTick = now
 
-    -- Fullbright
-    if getgenv().Features.FullBrightEnabled then
-        Lighting.Ambient        = Color3.fromRGB(255, 255, 255)
-        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
-        Lighting.Brightness     = 2
-        Lighting.ClockTime      = 14
-        Lighting.GlobalShadows  = false
-        Lighting.FogEnd         = 9e9
-    end
-
-    -- Full ESP refresh every 5 s
-    if now - LastFullESPRefresh > 5 then
-        LastFullESPRefresh = now
-        RefreshESP()
-    end
-
-    updateNextKillerDisplay()
-
-    local myChar  = LocalPlayer.Character
-    local myRoot  = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local killerNearby = false
-    local warnRadius   = getgenv().Features.KillerWarnRadius or 99
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            -- ESP nametags
-            updatePlayerNametag(p)
-
-            -- Killer proximity
-            if getgenv().Features.KillerWarning then
-                local pTeam = p.Team and p.Team.Name:lower() or ""
-                if pTeam:find("killer") and myRoot and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    if (p.Character.HumanoidRootPart.Position - myRoot.Position).Magnitude < warnRadius then
-                        killerNearby = true
-                    end
-                end
-            end
-
-            -- Hitbox
-            if getgenv().Features.HitboxEnabled and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                local doHitbox = true
-                if getgenv().Features.TeamCheck and LocalPlayer.Team == p.Team then
-                    doHitbox = false
-                end
-                if doHitbox then
-                    pcall(function()
-                        local hrp = p.Character.HumanoidRootPart
-                        local sz  = getgenv().Features.HitboxSize
-                        hrp.Size         = Vector3.new(sz, sz, sz)
-                        hrp.Transparency = 0.9
-                        hrp.Material     = Enum.Material.Neon
-                        hrp.CanCollide   = false
-                    end)
-                end
+    if ESPEnabled then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                updatePlayerNametag(p)
             end
         end
-    end
 
-    -- Killer warning billboard
-    if myRoot then
-        local warn = myRoot:FindFirstChild("KillerWarn")
-        if killerNearby and getgenv().Features.KillerWarning then
-            if not warn then
-                warn = CreateBillboardTag("!", Color3.fromRGB(255, 0, 0), UDim2.new(0, 50, 0, 50), 40)
-                warn.Name         = "KillerWarn"
-                warn.StudsOffset  = Vector3.new(0, 4, 0)
-                warn.Adornee      = myRoot
-                warn.Parent       = myRoot
+        for i = #ActiveGenerators, 1, -1 do
+            local g = ActiveGenerators[i]
+            if g and g.Parent then
+                if updateGeneratorProgress(g) then table.remove(ActiveGenerators, i) end
+            else
+                table.remove(ActiveGenerators, i)
             end
-        elseif warn then
-            warn:Destroy()
-        end
-    end
-
-    -- Generator progress
-    for i = #ActiveGenerators, 1, -1 do
-        local g = ActiveGenerators[i]
-        if g and g.Parent then
-            if updateGeneratorProgress(g) then table.remove(ActiveGenerators, i) end
-        else
-            table.remove(ActiveGenerators, i)
         end
     end
 end)
 
 Players.PlayerRemoving:Connect(function(p)
     if not IndicatorGui then return end
-    for _, suffix in ipairs({"_Chased", "_Killer", ""}) do
-        local obj = IndicatorGui:FindFirstChild(p.Name .. suffix)
-        if obj then obj:Destroy() end
+    local m = IndicatorGui:FindFirstChild(p.Name)
+    if m then m:Destroy() end
+end)
+
+workspace.ChildAdded:Connect(function(c)
+    if c.Name == "Map" and ESPEnabled then
+        task.wait(1)
+        RefreshESP()
     end
 end)
 
--- ===================== INIT =====================
+LocalPlayer.CharacterAdded:Connect(function(char)
+    SetupGui()
+    task.wait(0.5)
+    if ESPEnabled then RefreshESP() end
+    if speedHackEnabled then
+        local humanoid = char:WaitForChild("Humanoid", 10)
+        if humanoid then setupSpeedEnforcement(humanoid) end
+    end
+end)
 
+-- =============================================
+-- INIT
+-- =============================================
 SetupGui()
 RefreshESP()
-InitializeAutobuy()
 
 Rayfield:Notify({
-    Title    = "Yutzz",
-    Content  = "Successfully Loaded!",
-    Duration = 5
+    Title = "Loaded!",
+    Content = "Yutzz VD Loaded! Press 1-9 for speed, 0 to disable",
+    Duration = 5,
+    Image = 4483345998,
 })
